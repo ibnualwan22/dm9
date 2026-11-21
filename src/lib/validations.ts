@@ -135,23 +135,6 @@ export const certificateLookupSchema = z.object({
 
 export type CertificateLookupValues = z.infer<typeof certificateLookupSchema>;
 
-export const lockParticipantNameSchema = z.object({
-  participantId: z.string().min(1, "ID Peserta tidak valid."),
-  registrationCode: z
-    .string()
-    .trim()
-    .regex(/^DM9-[A-Z0-9]{4}$/i, "Kode pendaftaran tidak valid."),
-  fullName: z
-    .string()
-    .trim()
-    .min(3, "Ejaan nama lengkap minimal 3 karakter.")
-    .max(100, "Ejaan nama lengkap maksimal 100 karakter."),
-});
-
-export type LockParticipantNameValues = z.infer<
-  typeof lockParticipantNameSchema
->;
-
 // ============================================================================
 // 4. SKEMA VALIDASI CLIENT-SIDE FILE UPLOAD HELPER
 // ============================================================================
@@ -216,6 +199,14 @@ export const verifyPaymentActionSchema = z
 
 export type VerifyPaymentActionValues = z.infer<
   typeof verifyPaymentActionSchema
+>;
+
+export const resendVerificationWhatsAppSchema = z.object({
+  registrationId: z.string().min(1, "ID Pendaftaran wajib diisi."),
+});
+
+export type ResendVerificationWhatsAppValues = z.infer<
+  typeof resendVerificationWhatsAppSchema
 >;
 
 export const competitionUpsertSchema = z.object({

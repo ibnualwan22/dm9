@@ -8,14 +8,14 @@ import {
   Download,
   UserCheck,
   FileSpreadsheet,
-  Lock,
-  Unlock,
+  MessageCircle,
   Edit3,
   Check,
   X,
   Loader2,
   ExternalLink,
 } from "lucide-react";
+import { formatDateID } from "@/lib/utils";
 import { PaymentStatus } from "@prisma/client";
 import {
   toggleParticipantPresenceAction,
@@ -28,7 +28,6 @@ export interface AdminParticipantRow {
   fullName: string;
   role: string;
   isPresent: boolean;
-  isNameLocked: boolean;
   certificateNumber: string | null;
   certificateSentAt: string | null;
   registration: {
@@ -38,6 +37,7 @@ export interface AdminParticipantRow {
     institution: string;
     leaderEmail: string;
     leaderPhone: string;
+    waVerifiedSentAt: string | null;
     paymentStatus: PaymentStatus;
     paymentAmount: number;
     competition: {
@@ -74,7 +74,6 @@ export function ParticipantTable({
   const [bulkLoading, setBulkLoading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editNameValue, setEditNameValue] = useState("");
-  const [editLockValue, setEditLockValue] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
 
@@ -157,7 +156,6 @@ export function ParticipantTable({
   function startEditing(row: AdminParticipantRow) {
     setEditingId(row.id);
     setEditNameValue(row.fullName);
-    setEditLockValue(row.isNameLocked);
   }
 
   async function saveAdminEdit(participantId: string) {
@@ -166,8 +164,7 @@ export function ParticipantTable({
     try {
       const res = await updateParticipantNameByAdminAction(
         participantId,
-        editNameValue,
-        editLockValue
+        editNameValue
       );
       if (res.success) {
         setEditingId(null);
@@ -192,7 +189,7 @@ export function ParticipantTable({
       "Status Bayar": p.registration.paymentStatus,
       "Nominal Transfer": p.registration.paymentAmount,
       "Kehadiran Hari-H": p.isPresent ? "HADIR" : "BELUM HADIR",
-      "Status Kunci Nama": p.isNameLocked ? "TERKUNCI" : "BELUM",
+      "Status WA": p.registration.waVerifiedSentAt ? "TERKIRIM" : "BELUM",
       "Nomor e-Syahadah": p.certificateNumber || "-",
     }));
 
@@ -391,9 +388,7 @@ export function ParticipantTable({
                 filteredParticipants.map((p) => {
                   const isEditing = editingId === p.id;
                   const canDownloadCert =
-                    p.registration.paymentStatus === "VERIFIED" &&
-                    p.isPresent &&
-                    p.isNameLocked;
+                    p.registration.paymentStatus === "VERIFIED" && p.isPresent;
 
                   return (
                     <tr
@@ -410,7 +405,7 @@ export function ParticipantTable({
                         </p>
                       </td>
 
-                      {/* Kolom 2: Nama Peserta & Kunci Ejaan */}
+                      {/* Kolom 2: Nama Peserta */}
                       <td className="px-4 py-3.5 align-top min-w-[240px]">
                         {isEditing ? (
                           <div className="space-y-2 rounded-lg border border-brand bg-[#FFFFFC]/75 p-2.5">
@@ -420,18 +415,7 @@ export function ParticipantTable({
                               onChange={(e) => setEditNameValue(e.target.value)}
                               className="input-field py-1 px-2 text-xs"
                             />
-                            <div className="flex items-center justify-between gap-2">
-                              <label className="inline-flex items-center gap-1.5 text-xs text-ink-secondary cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={editLockValue}
-                                  onChange={(e) =>
-                                    setEditLockValue(e.target.checked)
-                                  }
-                                  className="rounded border-zinc-300 text-brand"
-                                />
-                                <span>Kunci Ejaan Nama</span>
-                              </label>
+                            <div className="flex items-center justify-end gap-2">
                               <div className="flex items-center gap-1">
                                 <button
                                   type="button"
@@ -472,17 +456,6 @@ export function ParticipantTable({
                               <span className="rounded bg-zinc-100 px-1.5 py-0.5 font-medium text-ink-secondary">
                                 {p.role}
                               </span>
-                              {p.isNameLocked ? (
-                                <span className="inline-flex items-center gap-1 rounded bg-brand-light px-1.5 py-0.5 font-semibold text-brand">
-                                  <Lock className="h-3 w-3" />
-                                  <span>Nama Terkunci</span>
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-800">
-                                  <Unlock className="h-3 w-3" />
-                                  <span>Belum Dikunci</span>
-                                </span>
-                              )}
                             </div>
                           </div>
                         )}
@@ -498,6 +471,20 @@ export function ParticipantTable({
                         <p className="tabular-data text-xs text-ink-muted mt-0.5">
                           WA: {p.registration.leaderPhone}
                         </p>
+                        {p.registration.waVerifiedSentAt ? (
+                          <span className="mt-1 inline-flex items-center gap-1 rounded bg-brand-light px-1.5 py-0.5 text-[11px] font-semibold text-brand">
+                            <MessageCircle className="h-3 w-3" />
+                            <span>
+                              WA Terkirim{" "}
+                              {formatDateID(p.registration.waVerifiedSentAt)}
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="mt-1 inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">
+                            <MessageCircle className="h-3 w-3" />
+                            <span>WA Belum Terkirim</span>
+                          </span>
+                        )}
                       </td>
 
                       {/* Kolom 4: Status Bayar */}
@@ -565,11 +552,7 @@ export function ParticipantTable({
                           </div>
                         ) : (
                           <span className="text-[11px] text-ink-muted">
-                            {!p.isPresent
-                              ? "Menunggu Absen"
-                              : !p.isNameLocked
-                                ? "Nama Belum Dikunci"
-                                : "Belum Lunas"}
+                            {!p.isPresent ? "Menunggu Absen" : "Belum Lunas"}
                           </span>
                         )}
                       </td>

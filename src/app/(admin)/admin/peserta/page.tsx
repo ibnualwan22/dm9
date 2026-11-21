@@ -37,7 +37,6 @@ export default async function AdminParticipantsPage() {
     fullName: p.fullName,
     role: p.role,
     isPresent: p.isPresent,
-    isNameLocked: p.isNameLocked,
     certificateNumber: p.certificateNumber,
     certificateSentAt: p.certificateSentAt
       ? p.certificateSentAt.toISOString()
@@ -49,6 +48,9 @@ export default async function AdminParticipantsPage() {
       institution: p.registration.institution,
       leaderEmail: p.registration.leaderEmail,
       leaderPhone: p.registration.leaderPhone,
+      waVerifiedSentAt: p.registration.waVerifiedSentAt
+        ? p.registration.waVerifiedSentAt.toISOString()
+        : null,
       paymentStatus: p.registration.paymentStatus,
       paymentAmount: p.registration.paymentAmount,
       competition: p.registration.competition,
@@ -73,9 +75,9 @@ export default async function AdminParticipantsPage() {
           Manajemen Peserta, Absensi Hari-H &amp; Distribusi e-Syahadah
         </h1>
         <p className="mt-1 text-sm text-ink-secondary">
-          Centang kehadiran peserta pada Hari-H untuk membuka akses kunci nama
-          dan unduh PDF e-Syahadah, ekspor rekapitulasi ke Excel/CSV, atau kirim
-          sertifikat massal via email per batch.
+          Centang kehadiran peserta pada Hari-H untuk membuka akses unduh PDF
+          e-Syahadah, ekspor rekapitulasi ke Excel/CSV, atau kirim sertifikat
+          massal via email per batch.
         </p>
       </div>
 

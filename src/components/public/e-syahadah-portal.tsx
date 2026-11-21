@@ -6,13 +6,11 @@ import {
   Loader2,
   CheckCircle2,
   Download,
-  Lock,
   AlertCircle,
   UserCheck,
 } from "lucide-react";
 import {
   lookupForCertificateAction,
-  lockParticipantNameAction,
   type CertificateLookupItem,
 } from "@/actions/certificate.action";
 
@@ -25,12 +23,6 @@ export function ESyahadahPortal({ initialQuery = "" }: ESyahadahPortalProps) {
   const [result, setResult] = useState<CertificateLookupItem | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
-  const [lockingId, setLockingId] = useState<string | null>(null);
-  const [lockNames, setLockNames] = useState<Record<string, string>>({});
-  const [lockFeedback, setLockFeedback] = useState<{
-    type: "success" | "error";
-    text: string;
-  } | null>(null);
   const didAutoSearch = useRef(false);
 
   async function runLookup(code: string) {
@@ -38,7 +30,6 @@ export function ESyahadahPortal({ initialQuery = "" }: ESyahadahPortalProps) {
     if (!cleanCode) return;
     setSearching(true);
     setError(null);
-    setLockFeedback(null);
     try {
       const res = await lookupForCertificateAction({
         registrationCode: cleanCode,
@@ -49,11 +40,6 @@ export function ESyahadahPortal({ initialQuery = "" }: ESyahadahPortalProps) {
         return;
       }
       setResult(res.data);
-      setLockNames(
-        Object.fromEntries(
-          res.data.participants.map((p) => [p.id, p.fullName])
-        )
-      );
     } finally {
       setSearching(false);
     }
@@ -67,38 +53,6 @@ export function ESyahadahPortal({ initialQuery = "" }: ESyahadahPortalProps) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  async function handleLock(participantId: string) {
-    if (!result) return;
-    const name = (lockNames[participantId] || "").trim();
-    if (name.length < 3) {
-      setLockFeedback({
-        type: "error",
-        text: "Ejaan nama lengkap minimal 3 karakter.",
-      });
-      return;
-    }
-    setLockingId(participantId);
-    setLockFeedback(null);
-    try {
-      const res = await lockParticipantNameAction({
-        participantId,
-        registrationCode: result.registrationCode,
-        fullName: name,
-      });
-      if (!res.success) {
-        setLockFeedback({
-          type: "error",
-          text: res.error || "Gagal mengunci ejaan nama.",
-        });
-        return;
-      }
-      setLockFeedback({ type: "success", text: res.message || "Nama berhasil dikunci." });
-      await runLookup(result.registrationCode);
-    } finally {
-      setLockingId(null);
-    }
-  }
 
   const isVerified = result?.paymentStatus === "VERIFIED";
 
@@ -202,18 +156,6 @@ export function ESyahadahPortal({ initialQuery = "" }: ESyahadahPortalProps) {
             </div>
           )}
 
-          {lockFeedback && (
-            <div
-              className={`rounded-xl border p-3.5 text-xs font-semibold ${
-                lockFeedback.type === "success"
-                  ? "border-brand-border bg-brand-light text-brand"
-                  : "border-red-200 bg-red-50 text-red-700"
-              }`}
-            >
-              {lockFeedback.text}
-            </div>
-          )}
-
           <div className="space-y-3">
             <h2 className="text-sm font-bold text-ink">
               Daftar Peserta &amp; e-Syahadah
@@ -233,64 +175,18 @@ export function ESyahadahPortal({ initialQuery = "" }: ESyahadahPortalProps) {
                         : ""}
                     </p>
                   </div>
-                  {p.isNameLocked ? (
-                    <span className="inline-flex items-center gap-1 rounded bg-brand-light px-2 py-0.5 text-xs font-semibold text-brand">
-                      <Lock className="h-3 w-3" />
-                      <span>Nama Terkunci</span>
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
-                      <span>Nama Belum Dikunci</span>
-                    </span>
-                  )}
                 </div>
 
                 {!p.isPresent ? (
                   <p className="text-xs text-ink-muted">
-                    Kehadiran Hari-H belum diverifikasi panitia — penguncian
-                    nama dan unduh e-Syahadah belum tersedia.
+                    Kehadiran Hari-H belum diverifikasi panitia — unduh
+                    e-Syahadah belum tersedia.
                   </p>
-                ) : !p.isNameLocked ? (
-                  <div className="space-y-2">
-                    <label
-                      htmlFor={`lock-name-${p.id}`}
-                      className="label-field"
-                    >
-                      Konfirmasi Ejaan Nama untuk e-Syahadah
-                    </label>
-                    <div className="flex flex-col sm:flex-row gap-2.5">
-                      <input
-                        id={`lock-name-${p.id}`}
-                        type="text"
-                        value={lockNames[p.id] || ""}
-                        onChange={(e) =>
-                          setLockNames((prev) => ({
-                            ...prev,
-                            [p.id]: e.target.value,
-                          }))
-                        }
-                        disabled={!isVerified || lockingId === p.id}
-                        className="input-field"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleLock(p.id)}
-                        disabled={!isVerified || lockingId === p.id}
-                        className="btn-primary shrink-0 text-xs"
-                      >
-                        {lockingId === p.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Lock className="h-4 w-4" />
-                        )}
-                        <span>Kunci Nama</span>
-                      </button>
-                    </div>
-                    <p className="text-xs text-ink-muted">
-                      Setelah dikunci, ejaan nama tidak dapat diubah lagi.
-                      Pastikan ejaan sudah benar.
-                    </p>
-                  </div>
+                ) : !isVerified ? (
+                  <p className="text-xs text-ink-muted">
+                    Pembayaran belum terverifikasi — e-Syahadah baru bisa
+                    diunduh setelah pembayaran terverifikasi.
+                  </p>
                 ) : (
                   <div className="flex flex-wrap items-center gap-2.5">
                     <a
@@ -324,8 +220,7 @@ export function ESyahadahPortal({ initialQuery = "" }: ESyahadahPortalProps) {
             </p>
             <p>
               1. Pembayaran pendaftaran sudah terverifikasi (VERIFIED) — 2.
-              Kehadiran Hari-H sudah diverifikasi panitia — 3. Ejaan nama
-              sudah dikunci di halaman ini.
+              Kehadiran Hari-H sudah diverifikasi panitia.
             </p>
           </div>
         </div>

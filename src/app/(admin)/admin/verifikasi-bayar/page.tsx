@@ -35,6 +35,9 @@ export default async function TreasurerVerificationPage() {
     institution: r.institution,
     leaderEmail: r.leaderEmail,
     leaderPhone: r.leaderPhone,
+    waVerifiedSentAt: r.waVerifiedSentAt
+      ? r.waVerifiedSentAt.toISOString()
+      : null,
     paymentStatus: r.paymentStatus,
     paymentProofUrl: r.paymentProofUrl,
     uniqueCode: r.uniqueCode,

@@ -99,14 +99,13 @@ export async function bulkMarkParticipantsPresentAction(
 }
 
 /**
- * Server Action: Koreksi Nama & Status Kunci Nama oleh Admin (Override Darurat)
+ * Server Action: Koreksi Nama oleh Admin (Override Darurat)
  * Ejaan nama dipertahankan persis sesuai ketikan admin (TANPA Title Case)
  * agar gelar seperti "S.Pd" tidak berubah.
  */
 export async function updateParticipantNameByAdminAction(
   participantId: string,
-  fullName: string,
-  isNameLocked: boolean
+  fullName: string
 ): Promise<ActionResponse> {
   try {
     await assertAdminAuthenticated();
@@ -123,7 +122,6 @@ export async function updateParticipantNameByAdminAction(
       where: { id: participantId },
       data: {
         fullName: cleanName,
-        isNameLocked,
       },
     });
 

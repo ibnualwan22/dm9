@@ -4,7 +4,7 @@ import { ESyahadahPortal } from "@/components/public/e-syahadah-portal";
 export const metadata: Metadata = {
   title: "Unduh e-Syahadah",
   description:
-    "Kunci ejaan nama peserta dan unduh PDF e-Syahadah resmi Dies Miladis ke-9 Markaz Arabiyah.",
+    "Unduh PDF e-Syahadah resmi Dies Miladis ke-9 Markaz Arabiyah.",
 };
 
 export const dynamic = "force-dynamic";
@@ -24,8 +24,8 @@ export default function ESyahadahPage({
           Unduh e-Syahadah
         </h1>
         <p className="max-w-2xl text-sm leading-relaxed text-ink-secondary sm:text-base">
-          Masukkan Kode Pendaftaran (DM9-XXXX) untuk mengunci ejaan nama
-          peserta dan mengunduh PDF e-Syahadah resmi setelah kehadiran Hari-H
+          Masukkan Kode Pendaftaran (DM9-XXXX) untuk mengunduh PDF e-Syahadah
+          resmi setelah pembayaran terverifikasi dan kehadiran Hari-H
           diverifikasi panitia.
         </p>
       </div>

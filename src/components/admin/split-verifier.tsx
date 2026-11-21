@@ -14,9 +14,13 @@ import {
   FileText,
   Clock,
   AlertTriangle,
+  MessageCircle,
 } from "lucide-react";
 import { PaymentStatus } from "@prisma/client";
-import { verifyPaymentAction } from "@/actions/payment.action";
+import {
+  verifyPaymentAction,
+  resendVerificationWhatsAppAction,
+} from "@/actions/payment.action";
 import {
   formatDateID,
   formatRupiah,
@@ -30,6 +34,7 @@ export interface TreasurerQueueItem {
   institution: string;
   leaderEmail: string;
   leaderPhone: string;
+  waVerifiedSentAt: string | null;
   paymentStatus: PaymentStatus;
   paymentProofUrl: string | null;
   uniqueCode: number;
@@ -79,6 +84,7 @@ export function SplitVerifier({ items }: SplitVerifierProps) {
   const [showRejectBox, setShowRejectBox] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const [processing, setProcessing] = useState(false);
+  const [resending, setResending] = useState(false);
   const [feedback, setFeedback] = useState<{
     type: "success" | "error";
     text: string;
@@ -174,6 +180,29 @@ export function SplitVerifier({ items }: SplitVerifierProps) {
       });
     } finally {
       setProcessing(false);
+    }
+  }
+
+  async function handleResendWhatsApp() {
+    if (!activeItem) return;
+    setResending(true);
+    setFeedback(null);
+    try {
+      const res = await resendVerificationWhatsAppAction({
+        registrationId: activeItem.id,
+      });
+      setFeedback({
+        type: res.success ? "success" : "error",
+        text: res.message || res.error || "Gagal mengirim ulang WA.",
+      });
+      if (res.success) router.refresh();
+    } catch {
+      setFeedback({
+        type: "error",
+        text: "Terjadi kesalahan saat menghubungi server.",
+      });
+    } finally {
+      setResending(false);
     }
   }
 
@@ -495,7 +524,25 @@ export function SplitVerifier({ items }: SplitVerifierProps) {
                 </div>
               )}
 
-              {/* Kontrol Keputusan Bendahara (1 Primary CTA: Setujui, 1 Secondary: Tolak) */}
+              {/* Status WA Verifikasi (khusus baris yang sudah LUNAS) */}
+              {activeItem.paymentStatus === "VERIFIED" && (
+                <div className="rounded-lg border border-[#2A2622]/12 bg-[#FFFFFC]/50 p-3 text-xs text-ink-secondary flex flex-wrap items-center gap-2">
+                  <MessageCircle className="h-4 w-4 text-brand" />
+                  <span>
+                    WA verifikasi:{" "}
+                    {activeItem.waVerifiedSentAt ? (
+                      <strong>
+                        sudah terkirim{" "}
+                        {formatDateID(activeItem.waVerifiedSentAt, true)}
+                      </strong>
+                    ) : (
+                      <strong className="text-amber-800">belum terkirim</strong>
+                    )}
+                  </span>
+                </div>
+              )}
+
+              {/* Kontrol Keputusan Bendahara (Setujui/Tolak; baris LUNAS: Kirim WA Ulang) */}
               <div className="border-t border-[#2A2622]/12 pt-4 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
@@ -525,19 +572,35 @@ export function SplitVerifier({ items }: SplitVerifierProps) {
                       <span>Tolak + Alasan</span>
                     </button>
 
-                    <button
-                      type="button"
-                      disabled={processing}
-                      onClick={() => handleDecision("VERIFIED")}
-                      className="btn-primary text-xs"
-                    >
-                      {processing ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <CheckCircle2 className="h-4 w-4" />
-                      )}
-                      <span>Setujui Pembayaran (LUNAS)</span>
-                    </button>
+                    {activeItem.paymentStatus === "VERIFIED" ? (
+                      <button
+                        type="button"
+                        disabled={resending}
+                        onClick={handleResendWhatsApp}
+                        className="btn-primary text-xs"
+                      >
+                        {resending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <MessageCircle className="h-4 w-4" />
+                        )}
+                        <span>Kirim WA Ulang</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={processing}
+                        onClick={() => handleDecision("VERIFIED")}
+                        className="btn-primary text-xs"
+                      >
+                        {processing ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="h-4 w-4" />
+                        )}
+                        <span>Setujui Pembayaran (LUNAS)</span>
+                      </button>
+                    )}
                   </div>
                 </div>
 

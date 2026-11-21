@@ -105,8 +105,8 @@ export default async function PublicLandingPage() {
               },
               {
                 step: "03",
-                title: "Kunci Nama & Unduh e-Syahadah",
-                desc: "Setelah hadir di Hari-H, konfirmasi ejaan nama Anda 1 kali dan unduh PDF e-Syahadah ber-QR Code.",
+                title: "Unduh e-Syahadah",
+                desc: "Setelah hadir di Hari-H, unduh PDF e-Syahadah ber-QR Code.",
               },
             ].map((item) => (
               <div key={item.step} className="space-y-1.5">

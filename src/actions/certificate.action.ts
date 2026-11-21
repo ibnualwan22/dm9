@@ -5,11 +5,8 @@ import { PaymentStatus } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import {
   certificateLookupSchema,
-  lockParticipantNameSchema,
   type CertificateLookupValues,
-  type LockParticipantNameValues,
 } from "@/lib/validations";
-import { toTitleCase } from "@/lib/utils";
 import { sendCertificateEmail } from "@/lib/email";
 import type { ActionResponse } from "@/actions/registration.action";
 
@@ -25,7 +22,6 @@ export interface CertificateLookupItem {
     id: string;
     fullName: string;
     role: string;
-    isNameLocked: boolean;
     isPresent: boolean;
     certificateNumber: string | null;
   }>;
@@ -85,7 +81,6 @@ export async function lookupForCertificateAction(
           id: participant.id,
           fullName: participant.fullName,
           role: participant.role,
-          isNameLocked: participant.isNameLocked,
           isPresent: participant.isPresent,
           certificateNumber: participant.certificateNumber,
         })),
@@ -98,98 +93,6 @@ export async function lookupForCertificateAction(
         error instanceof Error
           ? error.message
           : "Terjadi kesalahan saat mencari data peserta.",
-    };
-  }
-}
-
-/**
- * Server Action: Konfirmasi & Kunci Ejaan Nama Peserta (Self-Service 1x sebelum unduh e-Syahadah)
- */
-export async function lockParticipantNameAction(
-  rawInput: LockParticipantNameValues
-): Promise<ActionResponse<{ fullName: string; isNameLocked: boolean }>> {
-  const parsed = lockParticipantNameSchema.safeParse(rawInput);
-  if (!parsed.success) {
-    return {
-      success: false,
-      error:
-        parsed.error.issues[0]?.message ||
-        "Format ejaan nama peserta tidak valid.",
-    };
-  }
-
-  const { participantId, registrationCode, fullName } = parsed.data;
-
-  try {
-    const participant = await prisma.participant.findUnique({
-      where: { id: participantId },
-      include: {
-        registration: true,
-      },
-    });
-
-    if (
-      !participant ||
-      participant.registration.registrationCode.toUpperCase() !==
-        registrationCode.toUpperCase()
-    ) {
-      return {
-        success: false,
-        error: "Data peserta tidak ditemukan atau kode pendaftaran tidak cocok.",
-      };
-    }
-
-    if (participant.registration.paymentStatus !== PaymentStatus.VERIFIED) {
-      return {
-        success: false,
-        error:
-          "Ejaan nama hanya dapat dikunci setelah pembayaran terverifikasi (LUNAS).",
-      };
-    }
-
-    if (!participant.isPresent) {
-      return {
-        success: false,
-        error:
-          "Ejaan nama baru dapat dikunci setelah kehadiran Anda diverifikasi oleh panitia di Hari-H.",
-      };
-    }
-
-    if (participant.isNameLocked) {
-      return {
-        success: false,
-        error:
-          "Ejaan nama peserta ini sudah dikunci sebelumnya dan tidak dapat diubah kembali.",
-      };
-    }
-
-    const updated = await prisma.participant.update({
-      where: { id: participant.id },
-      data: {
-        fullName: toTitleCase(fullName),
-        isNameLocked: true,
-      },
-    });
-
-    revalidatePath("/e-syahadah");
-    revalidatePath("/admin/peserta");
-
-    return {
-      success: true,
-      message:
-        "Ejaan nama berhasil dikunci secara permanen. Anda kini dapat mengunduh PDF e-Syahadah.",
-      data: {
-        fullName: updated.fullName,
-        isNameLocked: updated.isNameLocked,
-      },
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Gagal mengunci ejaan nama peserta.",
     };
   }
 }
@@ -266,7 +169,7 @@ export async function sendBatchCertificateEmailsAction(options?: {
     const errors: string[] = [];
 
     for (const participant of batchParticipants) {
-      // Kunci otomatis nama peserta saat pengiriman sertifikat resmi jika belum dikunci
+      // Kirim email sertifikat resmi ke peserta
       const emailResult = await sendCertificateEmail({
         toEmail: participant.registration.leaderEmail,
         participantName: participant.fullName,
@@ -285,7 +188,6 @@ export async function sendBatchCertificateEmailsAction(options?: {
         await prisma.participant.update({
           where: { id: participant.id },
           data: {
-            isNameLocked: true,
             certificateSentAt: new Date(),
           },
         });

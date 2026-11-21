@@ -16,11 +16,14 @@ import { toWhatsappInternational } from "@/lib/utils";
  * Ketahanan:
  * - Pengiriman TIDAK PERNAH menggagalkan verifikasi/pendaftaran (best-effort).
  * - Anti-kirim-ganda memakai kolom Registration.waVerifiedSentAt.
+ * - Kirim ulang (force: true) dari Meja Bendahara melewati penanda
+ *   anti-kirim-ganda, untuk pendaftaran yang WA-nya belum terkirim.
  * - Pembacaan & penulisan kolom flag dibungkus try/catch agar tetap jalan
  *   sebelum `prisma db push` kolom baru dijalankan di database live.
  */
 export async function notifyRegistrationVerified(
-  registrationId: string
+  registrationId: string,
+  options?: { force?: boolean }
 ): Promise<{ sent: boolean; skipped?: boolean; detail?: string }> {
   try {
     // Select eksplisit (tanpa waVerifiedSentAt) agar tetap jalan
@@ -56,7 +59,7 @@ export async function notifyRegistrationVerified(
       return { sent: false, detail: "Pendaftaran belum terverifikasi" };
     }
 
-    // Cek flag terkirim (best-effort).
+    // Cek flag terkirim (best-effort) — dilewati bila kirim ulang (force).
     let alreadySent = false;
     try {
       const flag = await prisma.registration.findUnique({
@@ -68,7 +71,7 @@ export async function notifyRegistrationVerified(
       alreadySent = false;
     }
 
-    if (alreadySent) {
+    if (alreadySent && !options?.force) {
       return { sent: false, skipped: true, detail: "Pesan sudah pernah terkirim" };
     }
 

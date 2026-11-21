@@ -97,7 +97,7 @@ export async function GET(
       );
     }
 
-    // Validasi 3 Syarat Mutlak Penerbitan e-Syahadah:
+    // Validasi 2 Syarat Mutlak Penerbitan e-Syahadah:
     // 1. Pembayaran VERIFIED (Lunas)
     if (participant.registration.paymentStatus !== PaymentStatus.VERIFIED) {
       return NextResponse.json(
@@ -117,18 +117,6 @@ export async function GET(
           success: false,
           error:
             "e-Syahadah belum dapat diterbitkan karena kehadiran peserta di Hari-H belum diverifikasi panitia.",
-        },
-        { status: 403 }
-      );
-    }
-
-    // 3. Ejaan Nama Terkunci (isNameLocked === true)
-    if (!participant.isNameLocked) {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            "Silakan konfirmasi dan kunci ejaan nama Anda terlebih dahulu melalui halaman /e-syahadah sebelum mengunduh e-Syahadah.",
         },
         { status: 403 }
       );
