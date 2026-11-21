@@ -1,0 +1,102 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CompetitionType {
+  INDIVIDUAL
+  TEAM
+}
+
+enum PaymentStatus {
+  PENDING
+  WAITING
+  VERIFIED
+  REJECTED
+}
+
+model Competition {
+  id               String          @id @default(cuid())
+  name             String
+  slug             String          @unique
+  type             CompetitionType
+  quota            Int
+  registrationFee  Int
+  maxMembers       Int             @default(1)
+  sopFileUrl       String
+  whatsappGroupUrl String
+  contactPerson    String
+  contactName      String
+  isActive         Boolean         @default(true)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  registrations    Registration[]
+
+  @@index([slug])
+  @@index([isActive])
+}
+
+model Registration {
+  id               String        @id @default(cuid())
+  registrationCode String        @unique
+  competitionId    String
+  teamName         String?
+  institution      String
+  leaderEmail      String
+  leaderPhone      String
+  paymentStatus    PaymentStatus @default(PENDING)
+  paymentProofUrl  String?
+  uniqueCode       Int
+  paymentAmount    Int
+  verifiedBy       String?
+  verifiedAt       DateTime?
+  rejectionReason  String?       @db.Text
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  competition      Competition   @relation(fields: [competitionId], references: [id], onDelete: Restrict)
+  participants     Participant[]
+
+  @@index([registrationCode])
+  @@index([leaderPhone])
+  @@index([paymentStatus])
+  @@index([competitionId, paymentStatus])
+}
+
+model Participant {
+  id                String       @id @default(cuid())
+  registrationId    String
+  fullName          String
+  isNameLocked      Boolean      @default(false)
+  role              String       @default("Peserta") // "Ketua" | "Anggota" | "Peserta"
+  certificateNumber String?      @unique
+  isPresent         Boolean      @default(false)
+  certificateSentAt DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  registration      Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+
+  @@index([registrationId])
+  @@index([isPresent])
+  @@index([certificateNumber])
+}
+
+model Announcement {
+  id            String   @id @default(cuid())
+  title         String
+  slug          String   @unique
+  content       String   @db.Text
+  isImportant   Boolean  @default(false)
+  attachmentUrl String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([isImportant, createdAt(sort: Desc)])
+}
+

@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Untitled blend · SAKURA MIST #FFE9C4 · SAPPAN ROSE #FFAE3F · SHELL WHITE #FFFFFC */
+  --feral-sakura-mist: #ffe9c4;
+  --feral-sappan-rose: #ffae3f;
+  --feral-shell-white: #fffffc;
+  --feral-ink: #2a2622;
+
+  --bg-canvas: #ffe9c4;
+  --bg-surface: rgba(255, 255, 252, 0.68);
+  --bg-surface-subtle: rgba(255, 249, 238, 0.55);
+  --border-hairline: rgba(42, 38, 34, 0.11);
+  --border-hover: rgba(42, 38, 34, 0.22);
+  --text-primary: #2a2622;
+  --text-secondary: #4a433c;
+  --text-muted: #786f65;
+  --accent-brand: #b45309;
+  --accent-brand-hover: #92400e;
+  --accent-amber: #d97706;
+  --radius-outer: 14px;
+  --radius-inner: 10px;
+}
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+    margin: 0;
+    background-color: var(--bg-canvas);
+    color: var(--text-primary);
+  }
+
+  html {
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
+}
+
+.gradient {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-color: #ffe9c4;
+  background-image: url("/backgrounds/feral-field.jpg");
+  background-size: cover;
+  background-position: center;
+}
+
+@layer components {
+  .tabular-data {
+    font-family: var(--font-mono), monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .sonorous-display {
+    font-family: var(--font-serif), Georgia, serif;
+    color: #2a2622;
+    text-shadow: 0 0.014em 0.18em rgba(42, 38, 34, 0.12);
+  }
+
+  .card-surface {
+    background-color: var(--bg-surface);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--border-hairline);
+    border-radius: var(--radius-outer);
+    box-shadow: 0 4px 24px -4px rgba(42, 38, 34, 0.04);
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-[#2A2622] px-5 py-2.5 text-sm font-semibold text-[#FFFFFC] shadow-sm transition-all duration-150 ease-out hover:bg-[#181512] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2A2622] focus-visible:ring-offset-2 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-[#2A2622]/15 bg-[#FFFFFC]/65 px-4 py-2.5 text-sm font-medium text-[#2A2622] backdrop-blur-md transition-all duration-150 ease-out hover:border-[#2A2622]/30 hover:bg-[#FFFFFC]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2A2622]/40 focus-visible:ring-offset-2 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition-all duration-150 ease-out hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .input-field {
+    @apply w-full rounded-xl border border-[#2A2622]/15 bg-[#FFFFFC]/80 px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-muted backdrop-blur-sm transition-colors duration-150 ease-out focus:border-brand focus:bg-[#FFFFFC] focus:outline-none focus:ring-2 focus:ring-brand/20 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-500;
+  }
+
+  .label-field {
+    @apply mb-1.5 block text-sm font-medium text-ink;
+  }
+}
