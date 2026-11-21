@@ -12,41 +12,40 @@ import {
 import type { ActionResponse } from "@/actions/registration.action";
 import { notifyRegistrationVerified } from "@/lib/whatsapp-notify";
 
+async function assertAdminAuthenticated() {
+  const token = cookies().get(ADMIN_COOKIE_NAME)?.value;
+  const isValid = await verifyAdminSessionToken(token);
+  if (!isValid) {
+    throw new Error("Sesi panitia telah berakhir. Silakan login kembali.");
+  }
+}
+
 /**
- * Server Action: Memverifikasi Pembayaran (Meja Bendahara)
- * - decision VERIFIED: status jadi VERIFIED (Lunas) + kirim WA otomatis
- *   berisi link Grup WA cabang lomba (non-blocking, anti-kirim-ganda).
- * - decision REJECTED: status jadi REJECTED + alasan penolakan wajib diisi.
- *   Peserta yang ditolak tidak mendapat WA penolakan — panitia menghubungi
- *   manual, dan peserta mendaftar ulang dari awal dengan bukti yang benar.
+ * Server Action Bendahara: Setujui (VERIFIED) atau Tolak (REJECTED + Alasan)
  */
 export async function verifyPaymentAction(
-  input: VerifyPaymentActionValues
+  rawInput: VerifyPaymentActionValues
 ): Promise<ActionResponse> {
-  const parsed = verifyPaymentActionSchema.safeParse(input);
-  if (!parsed.success) {
-    return {
-      success: false,
-      error:
-        parsed.error.issues[0]?.message ||
-        "Data verifikasi tidak valid. Periksa kembali.",
-    };
-  }
-
-  const token = cookies().get(ADMIN_COOKIE_NAME)?.value;
-  const isAuthenticated = await verifyAdminSessionToken(token);
-  if (!isAuthenticated) {
-    return {
-      success: false,
-      error: "Akses ditolak. Silakan login ulang sebagai panitia.",
-    };
-  }
-
   try {
-    // Select eksplisit (tanpa waVerifiedSentAt) agar tetap jalan
-    // sebelum kolom baru tersedia di database live.
+    await assertAdminAuthenticated();
+
+    const parsed = verifyPaymentActionSchema.safeParse(rawInput);
+    if (!parsed.success) {
+      return {
+        success: false,
+        error:
+          parsed.error.issues[0]?.message ||
+          "Data keputusan verifikasi tidak valid.",
+      };
+    }
+
+    const { registrationId, decision, verifiedBy, rejectionReason } =
+      parsed.data;
+
+    // Select eksplisit (tanpa kolom waVerifiedSentAt) agar verifikasi tetap
+    // jalan bila kolom baru belum di-push ke database live.
     const existing = await prisma.registration.findUnique({
-      where: { id: parsed.data.registrationId },
+      where: { id: registrationId },
       select: {
         id: true,
         registrationCode: true,
@@ -57,54 +56,55 @@ export async function verifyPaymentAction(
     if (!existing) {
       return {
         success: false,
-        error: "Data pendaftaran tidak ditemukan.",
+        error: "Data transaksi pendaftaran tidak ditemukan.",
       };
     }
 
-    const isApproved = parsed.data.decision === PaymentStatus.VERIFIED;
+    const isApproved = decision === "VERIFIED";
 
     await prisma.registration.update({
-      where: { id: parsed.data.registrationId },
+      where: { id: registrationId },
       data: {
-        paymentStatus: parsed.data.decision,
-        verifiedBy: parsed.data.verifiedBy,
+        paymentStatus: isApproved
+          ? PaymentStatus.VERIFIED
+          : PaymentStatus.REJECTED,
+        verifiedBy: verifiedBy.trim(),
         verifiedAt: new Date(),
-        rejectionReason: isApproved
-          ? null
-          : parsed.data.rejectionReason?.trim() || null,
+        rejectionReason: isApproved ? null : rejectionReason?.trim() || null,
       },
     });
 
-    revalidatePath("/");
+    // Bila disetujui, kirim WA otomatis berisi link grup cabang (best-effort,
+    // tidak menggagalkan verifikasi). Hasilnya dicatat di pesan sukses admin.
+    let waNote = "";
+    if (isApproved) {
+      const waResult = await notifyRegistrationVerified(registrationId);
+      waNote = waResult.skipped
+        ? " (WA tidak dikirim: sudah terkirim sebelumnya)"
+        : waResult.sent
+          ? " Pesan WhatsApp otomatis sudah dikirim ke peserta."
+          : ` (WA gagal dikirim: ${waResult.detail ?? "periksa konfigurasi WA"})`;
+    }
+
     revalidatePath("/admin");
     revalidatePath("/admin/verifikasi-bayar");
     revalidatePath("/admin/peserta");
-
-    // Kirim WA otomatis setelah VERIFIED (non-blocking).
-    let waNote = "";
-    if (isApproved) {
-      const notify = await notifyRegistrationVerified(
-        parsed.data.registrationId
-      );
-      waNote = notify.sent
-        ? " Pesan WA otomatis terkirim ke peserta."
-        : ` (Pesan WA otomatis gagal: ${notify.detail || "tidak diketahui"} — verifikasi tetap sah, klik Setujui lagi untuk mengirim ulang.)`;
-    }
+    revalidatePath("/e-syahadah");
+    revalidatePath("/");
 
     return {
       success: true,
       message: isApproved
         ? `Pembayaran ${existing.registrationCode} berhasil disetujui (VERIFIED).${waNote}`
-        : `Pembayaran ${existing.registrationCode} ditolak (REJECTED) dengan alasan yang tercatat.`,
+        : `Bukti transfer ${existing.registrationCode} ditolak (REJECTED) beserta catatan perbaikan.`,
     };
   } catch (error) {
-    console.error("Gagal verifikasi pembayaran:", error);
     return {
       success: false,
       error:
         error instanceof Error
           ? error.message
-          : "Terjadi kesalahan sistem saat menyimpan keputusan verifikasi.",
+          : "Gagal memproses verifikasi pembayaran.",
     };
   }
 }

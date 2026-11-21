@@ -103,8 +103,7 @@ export const registrationFormSchema = z
       }
     }
 
-    // 2. Validasi Pembayaran & Bukti Transfer (wajib diunggah saat daftar,
-    //    kecuali lomba gratis — opsi Bayar Nanti / Kunci Kuota sudah dihapus).
+    // 2. Validasi Pembayaran & Bukti Transfer
     const isFreeCompetition = data.registrationFee === 0;
 
     if (!isFreeCompetition) {
@@ -297,3 +296,5 @@ export const announcementUpsertSchema = z.object({
 });
 
 export type AnnouncementUpsertValues = z.infer<typeof announcementUpsertSchema>;
+
+

@@ -21,7 +21,7 @@ import { toWhatsappInternational } from "@/lib/utils";
  */
 export async function notifyRegistrationVerified(
   registrationId: string
-): Promise<{ sent: boolean; detail?: string }> {
+): Promise<{ sent: boolean; skipped?: boolean; detail?: string }> {
   try {
     // Select eksplisit (tanpa waVerifiedSentAt) agar tetap jalan
     // sebelum kolom baru tersedia di database live.
@@ -69,7 +69,7 @@ export async function notifyRegistrationVerified(
     }
 
     if (alreadySent) {
-      return { sent: false, detail: "Pesan sudah pernah terkirim" };
+      return { sent: false, skipped: true, detail: "Pesan sudah pernah terkirim" };
     }
 
     const leaderName =

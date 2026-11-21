@@ -59,9 +59,6 @@ export function formatDateID(
   dateInput: Date | string | null | undefined,
   includeTime = false
 ): string {
-  if (typeof dateInput === "string") {
-    // handled below
-  }
   if (!dateInput) return "-";
   const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
   if (Number.isNaN(date.getTime())) return "-";
@@ -175,3 +172,4 @@ export function slugify(text: string): string {
     .replace(/[\s_-]+/g, "-")
     .replace(/^-+|-+$/g, "");
 }
+
