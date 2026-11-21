@@ -446,7 +446,7 @@ export function SplitVerifier({ items }: SplitVerifierProps) {
                         Belum Ada File Bukti Transfer
                       </p>
                       <p className="text-xs">
-                        Peserta memilih opsi Bayar Nanti (Kunci Kuota).
+                        Belum ada bukti transfer yang diunggah.
                       </p>
                     </div>
                   ) : isPdfProof ? (
@@ -547,8 +547,8 @@ export function SplitVerifier({ items }: SplitVerifierProps) {
                     <div className="flex items-center gap-2 text-xs font-bold text-red-800">
                       <AlertTriangle className="h-4 w-4" />
                       <span>
-                        Pilih atau Tulis Alasan Penolakan (Tampil di /cek-status
-                        Peserta)
+                        Pilih atau Tulis Alasan Penolakan (Disampaikan panitia
+                        ke peserta)
                       </span>
                     </div>
 
@@ -569,7 +569,7 @@ export function SplitVerifier({ items }: SplitVerifierProps) {
                       rows={2}
                       value={rejectionReason}
                       onChange={(e) => setRejectionReason(e.target.value)}
-                      placeholder="Tuliskan catatan jelas agar peserta dapat mengunggah ulang bukti transfer yang benar..."
+                      placeholder="Tuliskan catatan jelas agar peserta dapat mendaftar ulang dengan bukti transfer yang benar..."
                       className="input-field text-xs"
                     />
 

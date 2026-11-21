@@ -55,6 +55,7 @@ model Registration {
   paymentAmount    Int
   verifiedBy       String?
   verifiedAt       DateTime?
+  waVerifiedSentAt DateTime?
   rejectionReason  String?       @db.Text
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
@@ -99,4 +100,3 @@ model Announcement {
 
   @@index([isImportant, createdAt(sort: Desc)])
 }
-

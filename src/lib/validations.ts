@@ -12,9 +12,9 @@ export const indonesianPhoneSchema = z
   .min(10, "Nomor WhatsApp minimal 10 digit.")
   .max(18, "Nomor WhatsApp maksimal 18 karakter.")
   .transform((val) => normalizePhone(val))
-  .refine((val) => /^08[1-9][0-9]{7,12}$/.test(val), {
+  .refine((val) => /^62[1-9][0-9]{7,12}$/.test(val), {
     message:
-      "Format Nomor WhatsApp tidak valid (contoh yang benar: 081234567890).",
+      "Format Nomor WhatsApp tidak valid (contoh yang benar: 081234567890 atau +6281234567890).",
   });
 
 export const participantMemberSchema = z.object({
@@ -67,8 +67,6 @@ export const registrationFormSchema = z
       .array(participantMemberSchema)
       .min(1, "Minimal harus ada 1 peserta terdaftar."),
 
-    payLater: z.boolean().default(false),
-
     paymentProofUrl: z
       .string()
       .trim()
@@ -105,16 +103,16 @@ export const registrationFormSchema = z
       }
     }
 
-    // 2. Validasi Pembayaran & Bukti Transfer
+    // 2. Validasi Pembayaran & Bukti Transfer (wajib diunggah saat daftar,
+    //    kecuali lomba gratis — opsi Bayar Nanti / Kunci Kuota sudah dihapus).
     const isFreeCompetition = data.registrationFee === 0;
 
-    if (!isFreeCompetition && !data.payLater) {
+    if (!isFreeCompetition) {
       if (!data.paymentProofUrl || data.paymentProofUrl.trim() === "") {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["paymentProofUrl"],
-          message:
-            "Silakan unggah bukti transfer atau aktifkan opsi 'Bayar Nanti (Kunci Kuota Dulu)'.",
+          message: "Silakan unggah bukti transfer terlebih dahulu.",
         });
       }
     }
@@ -123,32 +121,20 @@ export const registrationFormSchema = z
 export type RegistrationFormValues = z.infer<typeof registrationFormSchema>;
 
 // ============================================================================
-// 3. SKEMA PORTAL CEK STATUS & SELF-SERVICE PESERTA (/cek-status)
+// 3. SKEMA HALAMAN UNDUH E-SYAHADAH (/e-syahadah)
 // ============================================================================
 
-export const checkStatusLookupSchema = z.object({
-  query: z
-    .string()
-    .trim()
-    .min(4, "Masukkan Kode Pendaftaran (DM9-XXXX) atau Nomor WhatsApp."),
-});
-
-export type CheckStatusLookupValues = z.infer<typeof checkStatusLookupSchema>;
-
-export const reuploadPaymentProofSchema = z.object({
+export const certificateLookupSchema = z.object({
   registrationCode: z
     .string()
     .trim()
-    .regex(/^DM9-[A-Z0-9]{4}$/i, "Format kode pendaftaran tidak valid."),
-  paymentProofUrl: z
-    .string()
-    .trim()
-    .url("File bukti transfer wajib diunggah terlebih dahulu."),
+    .regex(
+      /^DM9-[A-Z0-9]{4}$/i,
+      "Format kode pendaftaran tidak valid (contoh: DM9-XXXX)."
+    ),
 });
 
-export type ReuploadPaymentProofValues = z.infer<
-  typeof reuploadPaymentProofSchema
->;
+export type CertificateLookupValues = z.infer<typeof certificateLookupSchema>;
 
 export const lockParticipantNameSchema = z.object({
   participantId: z.string().min(1, "ID Peserta tidak valid."),
@@ -311,4 +297,3 @@ export const announcementUpsertSchema = z.object({
 });
 
 export type AnnouncementUpsertValues = z.infer<typeof announcementUpsertSchema>;
-

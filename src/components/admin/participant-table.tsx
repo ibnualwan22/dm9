@@ -255,7 +255,7 @@ export function ParticipantTable({
               <option value="ALL">Semua Status Bayar</option>
               <option value="VERIFIED">VERIFIED (Lunas)</option>
               <option value="WAITING">WAITING (Antrean TF)</option>
-              <option value="PENDING">PENDING (Kunci Kuota)</option>
+              <option value="PENDING">PENDING (Belum Ada Bukti)</option>
               <option value="REJECTED">REJECTED (Ditolak)</option>
             </select>
           </div>

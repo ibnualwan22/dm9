@@ -59,6 +59,9 @@ export function formatDateID(
   dateInput: Date | string | null | undefined,
   includeTime = false
 ): string {
+  if (typeof dateInput === "string") {
+    // handled below
+  }
   if (!dateInput) return "-";
   const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
   if (Number.isNaN(date.getTime())) return "-";
@@ -79,16 +82,20 @@ export function formatDateID(
 }
 
 /**
- * Normalisasi nomor WhatsApp ke format standar "08xxxxxxxxxx"
- * Menerima input seperti "+62 812-3456-7890", "6281234567890", "081234567890"
+ * Normalisasi nomor WhatsApp ke format internasional "628xxxxxxxxxx"
+ * (tanpa tanda +) agar bisa langsung dipakai gateway WA otomatis.
+ * Menerima input seperti "+62 812-3456-7890", "6281234567890", "081234567890".
  */
 export function normalizePhone(rawPhone: string): string {
   const digitsOnly = rawPhone.replace(/\D/g, "");
   if (digitsOnly.startsWith("62")) {
-    return `0${digitsOnly.slice(2)}`;
+    return digitsOnly;
+  }
+  if (digitsOnly.startsWith("0")) {
+    return `62${digitsOnly.slice(1)}`;
   }
   if (digitsOnly.startsWith("8")) {
-    return `0${digitsOnly}`;
+    return `62${digitsOnly}`;
   }
   return digitsOnly;
 }
@@ -115,6 +122,25 @@ export function buildContactWhatsappUrl(
   const waNumber = toWhatsappInternational(contactPhone);
   const message = `Assalamu'alaikum Kak ${contactName}, saya ingin bertanya terkait perlombaan *${competitionName}* pada acara Dies Miladis ke-9.`;
   return `https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`;
+}
+
+/**
+ * Mengubah teks menjadi Title Case (huruf besar di awal tiap kata).
+ * Dipakai untuk nama peserta & nama tim agar tersimpan rapi di database
+ * dan tampil rapi di pesan WA otomatis.
+ * Contoh: "muhammad ali" -> "Muhammad Ali"; "tim al-ghazali" -> "Tim Al-Ghazali".
+ * Nama instansi TIDAK ikut diubah (singkatan seperti "PP." harus dipertahankan).
+ */
+export function toTitleCase(text: string): string {
+  return text
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase()
+    .replace(
+      /(^|[\s-])([a-z])/g,
+      (_match: string, prefix: string, letter: string) =>
+        `${prefix}${letter.toUpperCase()}`
+    );
 }
 
 /**
@@ -149,4 +175,3 @@ export function slugify(text: string): string {
     .replace(/[\s_-]+/g, "-")
     .replace(/^-+|-+$/g, "");
 }
-

@@ -107,7 +107,7 @@ export default async function AdminOverviewPage() {
             {verifiedRegistrations.length}
           </p>
           <p className="mt-1 text-xs text-ink-muted">
-            {pendingRegistrations.length} pendaftaran masih kunci kuota (PENDING)
+            {pendingRegistrations.length} pendaftaran menunggu bukti transfer (PENDING)
           </p>
         </div>
 

@@ -30,7 +30,7 @@ export async function toggleParticipantPresenceAction(
     });
 
     revalidatePath("/admin/peserta");
-    revalidatePath("/cek-status");
+    revalidatePath("/e-syahadah");
 
     return {
       success: true,
@@ -78,7 +78,7 @@ export async function bulkMarkParticipantsPresentAction(
     });
 
     revalidatePath("/admin/peserta");
-    revalidatePath("/cek-status");
+    revalidatePath("/e-syahadah");
 
     return {
       success: true,
@@ -100,6 +100,8 @@ export async function bulkMarkParticipantsPresentAction(
 
 /**
  * Server Action: Koreksi Nama & Status Kunci Nama oleh Admin (Override Darurat)
+ * Ejaan nama dipertahankan persis sesuai ketikan admin (TANPA Title Case)
+ * agar gelar seperti "S.Pd" tidak berubah.
  */
 export async function updateParticipantNameByAdminAction(
   participantId: string,
@@ -126,7 +128,7 @@ export async function updateParticipantNameByAdminAction(
     });
 
     revalidatePath("/admin/peserta");
-    revalidatePath("/cek-status");
+    revalidatePath("/e-syahadah");
 
     return {
       success: true,

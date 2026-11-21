@@ -5,454 +5,245 @@ import { PaymentStatus } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import {
   registrationFormSchema,
-  checkStatusLookupSchema,
-  reuploadPaymentProofSchema,
   type RegistrationFormValues,
-  type ReuploadPaymentProofValues,
 } from "@/lib/validations";
 import {
   generateRegistrationCode,
   generateUniquePaymentCode,
-  normalizePhone,
+  toTitleCase,
 } from "@/lib/utils";
+import { notifyRegistrationVerified } from "@/lib/whatsapp-notify";
 
 export interface ActionResponse<T = undefined> {
   success: boolean;
-  message?: string;
-  error?: string;
   data?: T;
+  error?: string;
+  message?: string;
 }
 
 export interface SubmittedRegistrationSummary {
-  id: string;
   registrationCode: string;
   competitionName: string;
-  competitionSlug: string;
   institution: string;
   paymentStatus: PaymentStatus;
-  uniqueCode: number;
   paymentAmount: number;
-  registrationFee: number;
-}
-
-/**
- * Server Action: Submit Pendaftaran Lomba (Individu maupun Beregu)
- * Dilengkapi Atomic Quota Check & Generator Kode Unik Anti-Bentrok di dalam $transaction.
- */
-export async function submitRegistrationAction(
-  rawInput: RegistrationFormValues
-): Promise<ActionResponse<SubmittedRegistrationSummary>> {
-  const parsed = registrationFormSchema.safeParse(rawInput);
-
-  if (!parsed.success) {
-    const firstIssue = parsed.error.issues[0];
-    return {
-      success: false,
-      error: firstIssue?.message || "Data formulir pendaftaran tidak valid.",
-    };
-  }
-
-  const input = parsed.data;
-
-  try {
-    const result = await prisma.$transaction(async (tx) => {
-      const competition = await tx.competition.findUnique({
-        where: { id: input.competitionId },
-      });
-
-      if (!competition || !competition.isActive) {
-        throw new Error(
-          "Cabang perlombaan tidak ditemukan atau pendaftaran telah ditutup."
-        );
-      }
-
-      // 1. Proteksi Race Condition Kuota:
-      // Seluruh status pendaftaran (PENDING, WAITING, VERIFIED, REJECTED) menahan 1 slot kuota
-      // agar peserta REJECTED tetap bisa mengunggah ulang bukti transfer tanpa kehilangan slot.
-      const usedSlots = await tx.registration.count({
-        where: {
-          competitionId: competition.id,
-        },
-      });
-
-      if (usedSlots >= competition.quota) {
-        throw new Error(
-          `Mohon maaf, kuota untuk cabang lomba "${competition.name}" baru saja penuh (${competition.quota} slot).`
-        );
-      }
-
-      // Validasi jumlah anggota terhadap aturan cabang lomba di DB
-      if (
-        competition.type === "INDIVIDUAL" &&
-        input.participants.length !== 1
-      ) {
-        throw new Error(
-          "Cabang lomba individu hanya boleh terdiri dari 1 peserta."
-        );
-      }
-
-      if (
-        competition.type === "TEAM" &&
-        input.participants.length > competition.maxMembers
-      ) {
-        throw new Error(
-          `Jumlah anggota tim tidak boleh melebihi ${competition.maxMembers} orang.`
-        );
-      }
-
-      // 2. Generate Kode Pendaftaran Unik (DM9-XXXX) bebas bentrok
-      let registrationCode = generateRegistrationCode();
-      for (let attempt = 0; attempt < 12; attempt++) {
-        const existingCode = await tx.registration.findUnique({
-          where: { registrationCode },
-          select: { id: true },
-        });
-        if (!existingCode) break;
-        registrationCode = generateRegistrationCode();
-      }
-
-      // 3. Kalkulasi Kode Unik 3 Digit (101-999) & Status Pembayaran
-      const isFree = competition.registrationFee === 0;
-      let finalUniqueCode = 0;
-      let finalPaymentAmount = 0;
-      let initialStatus: PaymentStatus = PaymentStatus.PENDING;
-
-      if (isFree) {
-        finalUniqueCode = 0;
-        finalPaymentAmount = 0;
-        initialStatus = PaymentStatus.VERIFIED;
-      } else {
-        // Cari kode unik yang sedang aktif (PENDING / WAITING) pada nominal biaya yang sama
-        const activeRegistrations = await tx.registration.findMany({
-          where: {
-            paymentStatus: {
-              in: [PaymentStatus.PENDING, PaymentStatus.WAITING],
-            },
-            competition: {
-              registrationFee: competition.registrationFee,
-            },
-          },
-          select: { uniqueCode: true },
-        });
-
-        const usedCodes = new Set(activeRegistrations.map((r) => r.uniqueCode));
-
-        const clientCandidate =
-          input.uniqueCode >= 101 && input.uniqueCode <= 999
-            ? input.uniqueCode
-            : generateUniquePaymentCode();
-
-        if (!usedCodes.has(clientCandidate)) {
-          finalUniqueCode = clientCandidate;
-        } else {
-          // Cari kode unik 101-999 yang belum terpakai
-          let foundCode: number | null = null;
-          for (let i = 0; i < 40; i++) {
-            const candidate = generateUniquePaymentCode();
-            if (!usedCodes.has(candidate)) {
-              foundCode = candidate;
-              break;
-            }
-          }
-          finalUniqueCode = foundCode ?? generateUniquePaymentCode();
-        }
-
-        finalPaymentAmount = competition.registrationFee + finalUniqueCode;
-        const hasProof =
-          !input.payLater &&
-          Boolean(input.paymentProofUrl && input.paymentProofUrl.trim() !== "");
-
-        initialStatus = hasProof
-          ? PaymentStatus.WAITING
-          : PaymentStatus.PENDING;
-      }
-
-      const cleanProofUrl =
-        !isFree &&
-        !input.payLater &&
-        input.paymentProofUrl &&
-        input.paymentProofUrl.trim() !== ""
-          ? input.paymentProofUrl.trim()
-          : null;
-
-      // 4. Simpan Pendaftaran beserta Anggota Peserta
-      const created = await tx.registration.create({
-        data: {
-          registrationCode,
-          competitionId: competition.id,
-          teamName:
-            competition.type === "TEAM" && input.teamName
-              ? input.teamName.trim()
-              : null,
-          institution: input.institution.trim(),
-          leaderEmail: input.leaderEmail.trim().toLowerCase(),
-          leaderPhone: normalizePhone(input.leaderPhone),
-          paymentStatus: initialStatus,
-          paymentProofUrl: cleanProofUrl,
-          uniqueCode: finalUniqueCode,
-          paymentAmount: finalPaymentAmount,
-          verifiedBy: isFree ? "Sistem Otomatis (Gratis)" : null,
-          verifiedAt: isFree ? new Date() : null,
-          participants: {
-            create: input.participants.map((p, idx) => ({
-              fullName: p.fullName.trim(),
-              role:
-                competition.type === "INDIVIDUAL"
-                  ? "Peserta"
-                  : idx === 0
-                    ? "Ketua"
-                    : "Anggota",
-            })),
-          },
-        },
-      });
-
-      return {
-        id: created.id,
-        registrationCode: created.registrationCode,
-        competitionName: competition.name,
-        competitionSlug: competition.slug,
-        institution: created.institution,
-        paymentStatus: created.paymentStatus,
-        uniqueCode: created.uniqueCode,
-        paymentAmount: created.paymentAmount,
-        registrationFee: competition.registrationFee,
-      };
-    });
-
-    revalidatePath("/");
-    revalidatePath(`/lomba/${result.competitionSlug}`);
-    revalidatePath("/cek-status");
-    revalidatePath("/admin");
-    revalidatePath("/admin/verifikasi-bayar");
-    revalidatePath("/admin/peserta");
-
-    return {
-      success: true,
-      message: "Pendaftaran berhasil disimpan.",
-      data: result,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Terjadi kesalahan saat memproses pendaftaran.",
-    };
-  }
-}
-
-export interface RegistrationLookupItem {
-  id: string;
-  registrationCode: string;
-  teamName: string | null;
-  institution: string;
-  leaderEmail: string;
-  leaderPhone: string;
-  paymentStatus: PaymentStatus;
-  paymentProofUrl: string | null;
   uniqueCode: number;
-  paymentAmount: number;
-  rejectionReason: string | null;
-  verifiedAt: string | null;
-  createdAt: string;
-  competition: {
-    id: string;
-    name: string;
-    slug: string;
-    type: "INDIVIDUAL" | "TEAM";
-    registrationFee: number;
-    sopFileUrl: string;
-    whatsappGroupUrl: string | null; // Hanya dikirim jika WAITING atau VERIFIED
-    contactPerson: string;
-    contactName: string;
-  };
+  isFree: boolean;
   participants: Array<{
-    id: string;
     fullName: string;
     role: string;
-    isNameLocked: boolean;
-    isPresent: boolean;
-    certificateNumber: string | null;
   }>;
 }
 
 /**
- * Server Action: Pencarian Pendaftaran di /cek-status berdasarkan Kode Unik (DM9-XXXX)
- * atau Nomor WhatsApp (mendukung multi-pendaftaran dari 1 guru pendamping/official).
+ * Server Action: Memproses Pendaftaran Peserta Baru (Individual / Tim)
+ * Alur Bisnis Terintegrasi:
+ * 1. Validasi Input (Zod Schema)
+ * 2. Validasi Kuota Cabang Lomba (Semua status pendaftaran menahan 1 slot)
+ * 3. Generate Kode Pendaftaran Unik (DM9-XXXX) & Kode Unik Pembayaran (3 Digit)
+ * 4. Deduplikasi Kode Unik Pembayaran Antar Pendaftar yang Belum Lunas
+ * 5. Simpan Transaksi Atomik (Registration + Participants)
+ * 6. Lomba gratis langsung VERIFIED otomatis + kirim WA berisi link grup.
+ *    Bukti transfer WAJIB diunggah saat daftar (opsi Bayar Nanti dihapus).
  */
-export async function lookupRegistrationsAction(
-  rawQuery: string
-): Promise<ActionResponse<RegistrationLookupItem[]>> {
-  const parsed = checkStatusLookupSchema.safeParse({ query: rawQuery });
-  if (!parsed.success) {
-    return {
-      success: false,
-      error: parsed.error.issues[0]?.message || "Kata kunci pencarian tidak valid.",
-    };
-  }
-
-  const trimmed = parsed.data.query.trim();
-  const isCodeFormat = /^DM9-[A-Z0-9]{4}$/i.test(trimmed);
-  const normalizedPhone = normalizePhone(trimmed);
-
-  try {
-    const registrations = await prisma.registration.findMany({
-      where: isCodeFormat
-        ? {
-            registrationCode: trimmed.toUpperCase(),
-          }
-        : {
-            OR: [
-              { registrationCode: trimmed.toUpperCase() },
-              ...(normalizedPhone.length >= 9
-                ? [{ leaderPhone: normalizedPhone }]
-                : []),
-            ],
-          },
-      include: {
-        competition: true,
-        participants: {
-          orderBy: { createdAt: "asc" },
-        },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
-
-    if (registrations.length === 0) {
-      return {
-        success: false,
-        error:
-          "Data pendaftaran tidak ditemukan. Pastikan Kode Pendaftaran (DM9-XXXX) atau Nomor WhatsApp yang dimasukkan sudah benar.",
-      };
-    }
-
-    const items: RegistrationLookupItem[] = registrations.map((reg) => {
-      const canAccessWhatsappGroup =
-        reg.paymentStatus === PaymentStatus.WAITING ||
-        reg.paymentStatus === PaymentStatus.VERIFIED;
-
-      return {
-        id: reg.id,
-        registrationCode: reg.registrationCode,
-        teamName: reg.teamName,
-        institution: reg.institution,
-        leaderEmail: reg.leaderEmail,
-        leaderPhone: reg.leaderPhone,
-        paymentStatus: reg.paymentStatus,
-        paymentProofUrl: reg.paymentProofUrl,
-        uniqueCode: reg.uniqueCode,
-        paymentAmount: reg.paymentAmount,
-        rejectionReason: reg.rejectionReason,
-        verifiedAt: reg.verifiedAt ? reg.verifiedAt.toISOString() : null,
-        createdAt: reg.createdAt.toISOString(),
-        competition: {
-          id: reg.competition.id,
-          name: reg.competition.name,
-          slug: reg.competition.slug,
-          type: reg.competition.type,
-          registrationFee: reg.competition.registrationFee,
-          sopFileUrl: reg.competition.sopFileUrl,
-          whatsappGroupUrl: canAccessWhatsappGroup
-            ? reg.competition.whatsappGroupUrl
-            : null,
-          contactPerson: reg.competition.contactPerson,
-          contactName: reg.competition.contactName,
-        },
-        participants: reg.participants.map((p) => ({
-          id: p.id,
-          fullName: p.fullName,
-          role: p.role,
-          isNameLocked: p.isNameLocked,
-          isPresent: p.isPresent,
-          certificateNumber: p.certificateNumber,
-        })),
-      };
-    });
-
-    return {
-      success: true,
-      data: items,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Terjadi kesalahan saat mencari data pendaftaran.",
-    };
-  }
-}
-
-/**
- * Server Action: Unggah / Unggah Ulang Bukti Transfer di /cek-status
- * Mengubah status PENDING atau REJECTED menjadi WAITING untuk diverifikasi bendahara.
- */
-export async function reuploadPaymentProofAction(
-  rawInput: ReuploadPaymentProofValues
-): Promise<ActionResponse> {
-  const parsed = reuploadPaymentProofSchema.safeParse(rawInput);
-
+export async function submitRegistrationAction(
+  input: RegistrationFormValues
+): Promise<ActionResponse<SubmittedRegistrationSummary>> {
+  const parsed = registrationFormSchema.safeParse(input);
   if (!parsed.success) {
     return {
       success: false,
       error:
         parsed.error.issues[0]?.message ||
-        "Data bukti transfer yang dikirim tidak valid.",
+        "Data formulir pendaftaran tidak valid. Harap periksa kembali.",
     };
   }
 
-  const code = parsed.data.registrationCode.toUpperCase();
+  const data = parsed.data;
 
   try {
-    const registration = await prisma.registration.findUnique({
-      where: { registrationCode: code },
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Cek Ketersediaan Kuota Lomba
+      const competition = await tx.competition.findUnique({
+        where: { id: data.competitionId },
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          quota: true,
+          registrationFee: true,
+          isActive: true,
+          maxMembers: true,
+        },
+      });
+
+      if (!competition) {
+        throw new Error("Cabang lomba tidak ditemukan.");
+      }
+
+      if (!competition.isActive) {
+        throw new Error(
+          "Pendaftaran untuk cabang lomba ini sudah ditutup panitia."
+        );
+      }
+
+      const usedQuota = await tx.registration.count({
+        where: { competitionId: data.competitionId },
+      });
+
+      if (usedQuota >= competition.quota) {
+        throw new Error(
+          `Kuota cabang lomba ${competition.name} sudah penuh (${usedQuota}/${competition.quota}).`
+        );
+      }
+
+      // 2. Persiapan Data Finansial & Status
+      const isFree = competition.registrationFee === 0;
+      const uniqueCode = isFree ? 0 : data.uniqueCode;
+      const paymentAmount = competition.registrationFee + uniqueCode;
+
+      // Bukti transfer wajib diunggah saat daftar untuk lomba berbayar.
+      const hasProof = Boolean(
+        data.paymentProofUrl && data.paymentProofUrl.trim() !== ""
+      );
+
+      let initialStatus: PaymentStatus;
+
+      if (isFree) {
+        // Lomba gratis langsung VERIFIED otomatis
+        initialStatus = PaymentStatus.VERIFIED;
+      } else if (hasProof) {
+        // Berbayar dengan bukti transfer -> Antrean Meja Bendahara (WAITING)
+        initialStatus = PaymentStatus.WAITING;
+      } else {
+        // Seharusnya tidak terjadi karena skema mewajibkan bukti transfer,
+        // tetapi dipertahankan sebagai jaring pengaman.
+        initialStatus = PaymentStatus.PENDING;
+      }
+
+      // 3. Generate Kode Pendaftaran Unik (DM9-XXXX) + Dedup
+      let registrationCode = generateRegistrationCode();
+      let retries = 0;
+      while (retries < 10) {
+        const exists = await tx.registration.findUnique({
+          where: { registrationCode },
+          select: { id: true },
+        });
+        if (!exists) break;
+        registrationCode = generateRegistrationCode();
+        retries++;
+      }
+
+      // 4. Dedup Kode Unik Pembayaran
+      let finalUniqueCode = uniqueCode;
+      if (!isFree) {
+        for (let attempt = 0; attempt < 10; attempt++) {
+          const conflict = await tx.registration.findFirst({
+            where: {
+              competitionId: data.competitionId,
+              uniqueCode: finalUniqueCode,
+              paymentAmount: {
+                gte: competition.registrationFee + 100,
+                lte: competition.registrationFee + 999,
+              },
+              paymentStatus: {
+                in: [PaymentStatus.PENDING, PaymentStatus.WAITING],
+              },
+            },
+            select: { id: true },
+          });
+          if (!conflict) break;
+          finalUniqueCode = generateUniquePaymentCode();
+        }
+      }
+
+      const finalAmount = competition.registrationFee + finalUniqueCode;
+
+      // 5. Simpan Data Registration & Participants (Atomik)
+      // Nama peserta & nama tim disimpan otomatis dalam Title Case;
+      // nama instansi dipertahankan sesuai ketikan (singkatan seperti "PP." tidak boleh berubah).
+      const cleanProofUrl =
+        !isFree && data.paymentProofUrl?.trim()
+          ? data.paymentProofUrl.trim()
+          : null;
+
+      const newRegistration = await tx.registration.create({
+        data: {
+          registrationCode,
+          competitionId: data.competitionId,
+          teamName:
+            competition.type === "TEAM" && data.teamName
+              ? toTitleCase(data.teamName)
+              : null,
+          institution: data.institution.trim(),
+          leaderEmail: data.leaderEmail.trim(),
+          leaderPhone: data.leaderPhone,
+          paymentStatus: initialStatus,
+          paymentProofUrl: cleanProofUrl,
+          uniqueCode: finalUniqueCode,
+          paymentAmount: finalAmount,
+          verifiedBy: isFree ? "Sistem Otomatis (Gratis)" : null,
+          verifiedAt: isFree ? new Date() : null,
+          participants: {
+            create: data.participants.map((p) => ({
+              fullName: toTitleCase(p.fullName),
+              role: p.role,
+            })),
+          },
+        },
+        include: {
+          participants: {
+            select: { fullName: true, role: true },
+            orderBy: { createdAt: "asc" },
+          },
+          competition: {
+            select: { name: true },
+          },
+        },
+      });
+
+      return {
+        registrationCode: newRegistration.registrationCode,
+        competitionName: newRegistration.competition.name,
+        institution: newRegistration.institution,
+        paymentStatus: newRegistration.paymentStatus,
+        paymentAmount: newRegistration.paymentAmount,
+        uniqueCode: newRegistration.uniqueCode,
+        isFree,
+        participants: newRegistration.participants,
+      };
     });
 
-    if (!registration) {
-      return {
-        success: false,
-        error: "Data pendaftaran tidak ditemukan.",
-      };
-    }
-
-    if (registration.paymentStatus === PaymentStatus.VERIFIED) {
-      return {
-        success: false,
-        error:
-          "Pembayaran Anda sudah terverifikasi (LUNAS), tidak perlu mengunggah ulang bukti transfer.",
-      };
-    }
-
-    await prisma.registration.update({
-      where: { id: registration.id },
-      data: {
-        paymentProofUrl: parsed.data.paymentProofUrl.trim(),
-        paymentStatus: PaymentStatus.WAITING,
-        rejectionReason: null,
-      },
-    });
-
-    revalidatePath("/cek-status");
+    revalidatePath("/");
     revalidatePath("/admin");
     revalidatePath("/admin/verifikasi-bayar");
+    revalidatePath("/admin/peserta");
+
+    // Lomba gratis langsung VERIFIED otomatis -> kirim WA berisi link grup
+    // (tanpa langkah admin). Best-effort: gagal kirim WA tidak membatalkan pendaftaran.
+    if (result.paymentStatus === PaymentStatus.VERIFIED) {
+      const reg = await prisma.registration.findUnique({
+        where: { registrationCode: result.registrationCode },
+        select: { id: true },
+      });
+      if (reg) {
+        await notifyRegistrationVerified(reg.id);
+      }
+    }
 
     return {
       success: true,
-      message:
-        "Bukti transfer berhasil dikirim! Status pendaftaran Anda kini menunggu verifikasi bendahara.",
+      message: `Pendaftaran berhasil! Kode Pendaftaran Anda adalah ${result.registrationCode}.`,
+      data: result,
     };
   } catch (error) {
+    console.error("Gagal submit pendaftaran:", error);
     return {
       success: false,
       error:
         error instanceof Error
           ? error.message
-          : "Gagal menyimpan bukti transfer.",
+          : "Terjadi kesalahan sistem saat menyimpan pendaftaran. Silakan coba lagi.",
     };
   }
 }

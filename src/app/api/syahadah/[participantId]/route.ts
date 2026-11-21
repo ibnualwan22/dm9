@@ -128,7 +128,7 @@ export async function GET(
         {
           success: false,
           error:
-            "Silakan konfirmasi dan kunci ejaan nama Anda terlebih dahulu melalui halaman /cek-status sebelum mengunduh e-Syahadah.",
+            "Silakan konfirmasi dan kunci ejaan nama Anda terlebih dahulu melalui halaman /e-syahadah sebelum mengunduh e-Syahadah.",
         },
         { status: 403 }
       );
@@ -307,6 +307,7 @@ export async function GET(
         fontSerifBold.widthOfTextAtSize(displayName, nameFontSize) / 2 + 20
       )
     );
+
     page.drawLine({
       start: { x: width / 2 - lineHalfWidth, y: height - 270 },
       end: { x: width / 2 + lineHalfWidth, y: height - 270 },

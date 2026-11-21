@@ -120,7 +120,7 @@ export function AnnouncementManager({
         ? [``, `📎 *Unduh Lampiran / Dokumen:*`, item.attachmentUrl]
         : []),
       ``,
-      `🌐 *Portal Resmi & Cek Status:*`,
+      `🌐 *Portal Resmi:*`,
       `${EVENT_CONFIG.appUrl}`,
       ``,
       `— _Panitia Pelaksana ${EVENT_CONFIG.name}_`,

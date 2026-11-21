@@ -77,14 +77,6 @@ async function main() {
       isImportant: true,
       attachmentUrl: "https://drive.google.com/file/d/1dm9-buku-panduan-utama/view",
     },
-    {
-      title: "Ketentuan Kunci Kuota (Bayar Nanti) & Batas Waktu Pelunasan",
-      slug: "ketentuan-kunci-kuota-dan-pelunasan",
-      content:
-        "Bagi delegasi instansi yang masih menunggu pencairan dana kolektif, Anda dapat memilih opsi 'Bayar Nanti (Kunci Kuota Dulu)' saat mengisi formulir pendaftaran. Simpan Kode Pendaftaran (DM9-XXXX) Anda dan unggah bukti transfer melalui halaman Cek Status maksimal H-3 penutupan pendaftaran.",
-      isImportant: false,
-      attachmentUrl: null,
-    },
   ];
 
   for (const item of announcements) {
@@ -106,4 +98,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-

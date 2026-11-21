@@ -26,7 +26,7 @@ function buildCertificateEmailHtml(payload: CertificateEmailPayload): {
   const baseUrl = EVENT_CONFIG.appUrl.replace(/\/+$/, "");
   const directDownloadUrl = `${baseUrl}/api/syahadah/${encodeURIComponent(payload.participantId)}`;
   const verificationUrl = `${baseUrl}/verifikasi/${encodeURIComponent(payload.participantId)}`;
-  const portalUrl = `${baseUrl}/cek-status?q=${encodeURIComponent(payload.registrationCode)}`;
+  const portalUrl = `${baseUrl}/e-syahadah?q=${encodeURIComponent(payload.registrationCode)}`;
 
   const subject = `e-Syahadah Resmi ${EVENT_CONFIG.name} — ${payload.participantName}`;
 
@@ -39,7 +39,7 @@ function buildCertificateEmailHtml(payload: CertificateEmailPayload): {
     `e-Syahadah (Sertifikat Resmi) Anda telah siap diunduh:`,
     `- Unduh PDF e-Syahadah: ${directDownloadUrl}`,
     `- Halaman Validasi Keaslian: ${verificationUrl}`,
-    `- Portal Cek Status (${payload.registrationCode}): ${portalUrl}`,
+    `- Halaman Unduh e-Syahadah (${payload.registrationCode}): ${portalUrl}`,
     ``,
     `Wassalamu'alaikum Warahmatullahi Wabarakatuh,`,
     `Panitia Pelaksana ${EVENT_CONFIG.name}`,

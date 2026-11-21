@@ -16,7 +16,6 @@ import {
   ArrowRight,
   FileText,
   CreditCard,
-  Clock,
 } from "lucide-react";
 import {
   registrationFormSchema,
@@ -81,7 +80,6 @@ export function RegistrationForm({
           role: competition.type === "TEAM" ? "Ketua" : "Peserta",
         },
       ],
-      payLater: false,
       paymentProofUrl: "",
     },
   });
@@ -91,7 +89,6 @@ export function RegistrationForm({
     name: "participants",
   });
 
-  const watchPayLater = form.watch("payLater");
   const watchPaymentProofUrl = form.watch("paymentProofUrl");
   const isSubmitting = form.formState.isSubmitting;
 
@@ -191,9 +188,10 @@ export function RegistrationForm({
               Simpan Kode Pendaftaran Anda
             </h2>
             <p className="mt-1 text-sm text-ink-secondary">
-              Gunakan kode di bawah ini atau Nomor WhatsApp Anda di halaman{" "}
-              <strong>Cek Status</strong> untuk memantau verifikasi pembayaran,
-              masuk ke Grup WhatsApp Lomba, dan mengunduh e-Syahadah.
+              Simpan kode di bawah ini. Setelah bendahara memverifikasi
+              pembayaran, tautan Grup WhatsApp lomba dikirim otomatis ke nomor
+              WhatsApp Anda. Unduh e-Syahadah Anda di halaman{" "}
+              <strong>Unduh e-Syahadah</strong> setelah Hari-H.
             </p>
           </div>
         </div>
@@ -250,16 +248,12 @@ export function RegistrationForm({
               className={`inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-bold ${
                 submittedData.paymentStatus === "VERIFIED"
                   ? "bg-brand-light text-brand"
-                  : submittedData.paymentStatus === "WAITING"
-                    ? "bg-amber-100 text-amber-800"
-                    : "bg-zinc-200 text-zinc-800"
+                  : "bg-amber-100 text-amber-800"
               }`}
             >
               {submittedData.paymentStatus === "VERIFIED"
                 ? "VERIFIED (Lunas / Gratis)"
-                : submittedData.paymentStatus === "WAITING"
-                  ? "WAITING (Menunggu Verifikasi Bendahara)"
-                  : "PENDING (Kuota Terkunci - Belum Upload Bukti)"}
+                : "WAITING (Menunggu Verifikasi Bendahara)"}
             </span>
           </div>
 
@@ -280,10 +274,10 @@ export function RegistrationForm({
 
         <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
           <Link
-            href={`/cek-status?q=${encodeURIComponent(submittedData.registrationCode)}`}
+            href={`/e-syahadah?q=${encodeURIComponent(submittedData.registrationCode)}`}
             className="btn-primary w-full sm:w-auto"
           >
-            <span>Buka Portal Cek Status &amp; Grup WA</span>
+            <span>Unduh e-Syahadah</span>
             <ArrowRight className="h-4 w-4" />
           </Link>
           <Link href="/" className="btn-secondary w-full sm:w-auto">
@@ -606,117 +600,86 @@ export function RegistrationForm({
               </div>
             </div>
 
-            {/* Opsi Bayar Nanti (Kunci Kuota Dulu) */}
-            <label
-              htmlFor="payLaterToggle"
-              className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#2A2622]/12 bg-[#FFFFFC]/50 p-4 transition-colors hover:border-[#2A2622]/25"
-            >
-              <input
-                id="payLaterToggle"
-                type="checkbox"
-                className="mt-1 h-4 w-4 rounded border-zinc-300 text-brand focus:ring-brand"
-                {...form.register("payLater")}
-              />
-              <div className="text-sm">
-                <span className="font-semibold text-ink flex items-center gap-1.5">
-                  <Clock className="h-4 w-4 text-amber-accent" />
-                  <span>
-                    Bayar Nanti (Kunci Slot Kuota Sekarang, Upload Bukti
-                    Menyusul)
-                  </span>
-                </span>
-                <p className="mt-0.5 text-xs text-ink-secondary">
-                  Centang opsi ini jika Anda masih menunggu proses pencairan
-                  dana instansi. Kuota Anda akan langsung diamankan (status{" "}
-                  <span className="font-mono font-semibold">PENDING</span>) dan
-                  bukti transfer dapat diunggah nanti di halaman{" "}
-                  <strong>Cek Status</strong>.
+            {/* Dropzone Upload Bukti Transfer (Wajib) */}
+            <div className="space-y-2">
+              <span className="label-field">
+                Unggah Bukti Transfer <span className="text-red-600">*</span>
+              </span>
+
+              <label
+                htmlFor="paymentProofFileInput"
+                className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center transition-colors cursor-pointer ${
+                  watchPaymentProofUrl
+                    ? "border-brand bg-brand-light/30"
+                    : "border-[#2A2622]/15 bg-[#FFFFFC]/75 hover:border-brand hover:bg-[#FFFFFC]/50"
+                }`}
+              >
+                <input
+                  id="paymentProofFileInput"
+                  type="file"
+                  accept=".jpg,.jpeg,.png,.webp,.pdf"
+                  className="sr-only"
+                  disabled={uploadingFile}
+                  onChange={(e) => handleFileSelection(e.target.files?.[0])}
+                />
+
+                {uploadingFile ? (
+                  <div className="flex flex-col items-center gap-2 py-2">
+                    <Loader2 className="h-7 w-7 animate-spin text-brand" />
+                    <p className="text-sm font-medium text-ink">
+                      Mengunggah bukti transfer...
+                    </p>
+                  </div>
+                ) : watchPaymentProofUrl ? (
+                  <div className="space-y-3">
+                    {uploadPreviewUrl ? (
+                      <img
+                        src={uploadPreviewUrl}
+                        alt="Preview Bukti Transfer"
+                        className="mx-auto max-h-48 rounded-lg border border-[#2A2622]/12 object-contain"
+                      />
+                    ) : (
+                      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-brand-light text-brand">
+                        <FileText className="h-6 w-6" />
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-sm font-semibold text-brand">
+                        Bukti Transfer Siap Dikirim
+                      </p>
+                      <p className="text-xs text-ink-secondary">
+                        {uploadedFileName || "Klik untuk mengganti file"}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-[#FFFFFC]/50 border border-[#2A2622]/12 text-ink-secondary">
+                      <Upload className="h-5 w-5" />
+                    </div>
+                    <p className="text-sm font-semibold text-ink">
+                      Klik untuk memilih file bukti transfer
+                    </p>
+                    <p className="text-xs text-ink-muted">
+                      Format JPG, PNG, WEBP, atau PDF (Maksimal{" "}
+                      {UPLOAD_CONSTRAINTS.maxFileSizeLabel})
+                    </p>
+                  </div>
+                )}
+              </label>
+
+              {uploadError && (
+                <p className="text-xs font-medium text-red-600">
+                  {uploadError}
                 </p>
-              </div>
-            </label>
+              )}
 
-            {/* Dropzone Upload Bukti Transfer (Disembunyikan jika memilih Bayar Nanti) */}
-            {!watchPayLater && (
-              <div className="space-y-2">
-                <span className="label-field">
-                  Unggah Bukti Transfer <span className="text-red-600">*</span>
-                </span>
-
-                <label
-                  htmlFor="paymentProofFileInput"
-                  className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center transition-colors cursor-pointer ${
-                    watchPaymentProofUrl
-                      ? "border-brand bg-brand-light/30"
-                      : "border-[#2A2622]/15 bg-[#FFFFFC]/75 hover:border-brand hover:bg-[#FFFFFC]/50"
-                  }`}
-                >
-                  <input
-                    id="paymentProofFileInput"
-                    type="file"
-                    accept=".jpg,.jpeg,.png,.webp,.pdf"
-                    className="sr-only"
-                    disabled={uploadingFile}
-                    onChange={(e) => handleFileSelection(e.target.files?.[0])}
-                  />
-
-                  {uploadingFile ? (
-                    <div className="flex flex-col items-center gap-2 py-2">
-                      <Loader2 className="h-7 w-7 animate-spin text-brand" />
-                      <p className="text-sm font-medium text-ink">
-                        Mengunggah bukti transfer...
-                      </p>
-                    </div>
-                  ) : watchPaymentProofUrl ? (
-                    <div className="space-y-3">
-                      {uploadPreviewUrl ? (
-                        <img
-                          src={uploadPreviewUrl}
-                          alt="Preview Bukti Transfer"
-                          className="mx-auto max-h-48 rounded-lg border border-[#2A2622]/12 object-contain"
-                        />
-                      ) : (
-                        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-brand-light text-brand">
-                          <FileText className="h-6 w-6" />
-                        </div>
-                      )}
-                      <div>
-                        <p className="text-sm font-semibold text-brand">
-                          Bukti Transfer Siap Dikirim
-                        </p>
-                        <p className="text-xs text-ink-secondary">
-                          {uploadedFileName || "Klik untuk mengganti file"}
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-1.5">
-                      <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-[#FFFFFC]/50 border border-[#2A2622]/12 text-ink-secondary">
-                        <Upload className="h-5 w-5" />
-                      </div>
-                      <p className="text-sm font-semibold text-ink">
-                        Klik untuk memilih file bukti transfer
-                      </p>
-                      <p className="text-xs text-ink-muted">
-                        Format JPG, PNG, WEBP, atau PDF (Maksimal{" "}
-                        {UPLOAD_CONSTRAINTS.maxFileSizeLabel})
-                      </p>
-                    </div>
-                  )}
-                </label>
-
-                {uploadError && (
-                  <p className="text-xs font-medium text-red-600">
-                    {uploadError}
-                  </p>
-                )}
-
-                {form.formState.errors.paymentProofUrl && (
-                  <p className="text-xs font-medium text-red-600">
-                    {form.formState.errors.paymentProofUrl.message}
-                  </p>
-                )}
-              </div>
-            )}
+              {form.formState.errors.paymentProofUrl && (
+                <p className="text-xs font-medium text-red-600">
+                  {form.formState.errors.paymentProofUrl.message}
+                </p>
+              )}
+            </div>
           </div>
         )}
       </section>
