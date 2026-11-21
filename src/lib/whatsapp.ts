@@ -13,6 +13,12 @@
 
 const WA_API_URL = "https://wa-multi-session.amtsilatipusat.com/api/v1";
 
+/** Samarkan nomor di log (62***789) — log tidak boleh memuat nomor utuh. */
+function maskPhone(phone: string): string {
+  if (phone.length <= 7) return "***";
+  return `${phone.slice(0, 4)}***${phone.slice(-3)}`;
+}
+
 export async function sendWhatsAppMessage(
   target: string,
   message: string
@@ -22,11 +28,13 @@ export async function sendWhatsAppMessage(
     process.env.WA_SESSION_ID2 || process.env.WA_SESSION_ID || "default";
 
   if (!apiKey) {
+    console.warn("[whatsapp] WA_API_KEY belum dikonfigurasi");
     return { success: false, detail: "WA_API_KEY belum dikonfigurasi" };
   }
 
   const to = target.trim();
   if (!to) {
+    console.warn("[whatsapp] nomor tujuan kosong");
     return { success: false, detail: "Nomor tujuan kosong" };
   }
 
@@ -40,20 +48,51 @@ export async function sendWhatsAppMessage(
       body: JSON.stringify({ to, message }),
     });
 
-    const data = await res.json().catch(() => ({}));
+    // Baca body mentah dulu: isi body-lah yang membedakan 403 dari gateway
+    // (mis. sesi tidak ditemukan / nomor tidak terdaftar) dengan 403 dari
+    // Cloudflare (halaman HTML). Kunci API TIDAK PERNAH ditulis ke log.
+    const rawText = await res.text();
+    let data: Record<string, unknown> = {};
+    try {
+      data = JSON.parse(rawText) as Record<string, unknown>;
+    } catch {
+      data = {};
+    }
+
+    const logContext = {
+      sessionId,
+      to: maskPhone(to),
+      status: res.status,
+    };
 
     if (res.ok) {
+      console.log("[whatsapp] terkirim", logContext);
       return { success: true, detail: "Pesan terkirim" };
     }
 
+    console.error("[whatsapp] gagal", {
+      ...logContext,
+      body: rawText.slice(0, 500),
+    });
+
     return {
       success: false,
-      detail: data.message || data.error || `HTTP Error ${res.status}`,
+      detail:
+        (typeof data.message === "string" && data.message) ||
+        (typeof data.error === "string" && data.error) ||
+        `HTTP Error ${res.status}`,
     };
   } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Network error";
+    console.error("[whatsapp] network error", {
+      sessionId,
+      to: maskPhone(to),
+      error: errorMessage,
+    });
     return {
       success: false,
-      detail: error instanceof Error ? error.message : "Network error",
+      detail: errorMessage,
     };
   }
 }

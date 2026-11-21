@@ -39,6 +39,7 @@ interface RegistrationFormProps {
     maxMembers: number;
     quota: number;
     usedQuota: number;
+    isActive: boolean;
   };
   initialUniqueCode: number;
 }
@@ -48,6 +49,8 @@ export function RegistrationForm({
   initialUniqueCode,
 }: RegistrationFormProps) {
   const isFree = competition.registrationFee === 0;
+  const remainingQuota = Math.max(0, competition.quota - competition.usedQuota);
+  const isFullOrClosed = remainingQuota <= 0 || !competition.isActive;
   const effectiveUniqueCode = isFree ? 0 : initialUniqueCode;
   const totalTransferAmount =
     competition.registrationFee + effectiveUniqueCode;
@@ -282,6 +285,34 @@ export function RegistrationForm({
           </Link>
           <Link href="/" className="btn-secondary w-full sm:w-auto">
             Kembali ke Beranda
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Pemberitahuan Kuota Penuh / Pendaftaran Ditutup.
+  // Sengaja di sini (bukan di halaman lomba) dan SETELAH cabang sukses di
+  // atas: saat pendaftaran mengambil slot terakhir, halaman me-refresh
+  // kuota menjadi 0 — formulir harus tetap terpasang agar layar sukses
+  // (nomor pendaftaran) tidak hilang tertimpa pemberitahuan ini.
+  if (isFullOrClosed) {
+    return (
+      <div className="card-surface p-8 text-center space-y-4">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-red-50/80 text-red-600">
+          <AlertCircle className="h-6 w-6" />
+        </div>
+        <h2 className="sonorous-display text-2xl font-normal text-[#2A2622]">
+          Mohon Maaf, Pendaftaran Cabang Lomba Ini Tidak Tersedia
+        </h2>
+        <p className="text-sm text-ink-secondary max-w-md mx-auto">
+          Kuota pendaftaran untuk <strong>{competition.name}</strong> telah
+          terpenuhi ({competition.quota} slot) atau telah ditutup oleh
+          panitia.
+        </p>
+        <div className="pt-2">
+          <Link href="/#katalog-lomba" className="btn-primary">
+            Lihat Cabang Lomba Lainnya
           </Link>
         </div>
       </div>
@@ -599,6 +630,12 @@ export function RegistrationForm({
                 </div>
               </div>
             </div>
+
+            <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900">
+              Transfer harus sama persis dengan nominal di atas, termasuk 3
+              digit kode uniknya. Nominal yang tidak sama akan memperlambat
+              proses verifikasi oleh bendahara.
+            </p>
 
             {/* Dropzone Upload Bukti Transfer (Wajib) */}
             <div className="space-y-2">

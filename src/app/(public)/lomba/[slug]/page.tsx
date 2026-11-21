@@ -6,7 +6,6 @@ import {
   MessageCircle,
   Users,
   User,
-  AlertCircle,
 } from "lucide-react";
 import prisma from "@/lib/prisma";
 import {
@@ -130,41 +129,23 @@ export default async function CompetitionRegistrationPage({
         </div>
       </div>
 
-      {/* Formulir Pendaftaran atau Pemberitahuan Kuota Penuh */}
-      {isFullOrClosed ? (
-        <div className="card-surface p-8 text-center space-y-4">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-red-50/80 text-red-600">
-            <AlertCircle className="h-6 w-6" />
-          </div>
-          <h2 className="sonorous-display text-2xl font-normal text-[#2A2622]">
-            Mohon Maaf, Pendaftaran Cabang Lomba Ini Tidak Tersedia
-          </h2>
-          <p className="text-sm text-ink-secondary max-w-md mx-auto">
-            Kuota pendaftaran untuk <strong>{competition.name}</strong> telah
-            terpenuhi ({competition.quota} slot) atau telah ditutup oleh
-            panitia.
-          </p>
-          <div className="pt-2">
-            <Link href="/#katalog-lomba" className="btn-primary">
-              Lihat Cabang Lomba Lainnya
-            </Link>
-          </div>
-        </div>
-      ) : (
-        <RegistrationForm
-          competition={{
-            id: competition.id,
-            name: competition.name,
-            slug: competition.slug,
-            type: competition.type,
-            registrationFee: competition.registrationFee,
-            maxMembers: competition.maxMembers,
-            quota: competition.quota,
-            usedQuota,
-          }}
-          initialUniqueCode={initialUniqueCode}
-        />
-      )}
+      {/* Formulir Pendaftaran — keputusan tampil/tutup ada di dalam
+          RegistrationForm, agar layar sukses tidak hilang saat pendaftaran
+          mengambil slot terakhir dan halaman me-refresh kuota. */}
+      <RegistrationForm
+        competition={{
+          id: competition.id,
+          name: competition.name,
+          slug: competition.slug,
+          type: competition.type,
+          registrationFee: competition.registrationFee,
+          maxMembers: competition.maxMembers,
+          quota: competition.quota,
+          usedQuota,
+          isActive: competition.isActive,
+        }}
+        initialUniqueCode={initialUniqueCode}
+      />
     </div>
   );
 }

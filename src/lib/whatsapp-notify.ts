@@ -93,6 +93,12 @@ export async function notifyRegistrationVerified(
       message
     );
 
+    console.log("[whatsapp] notify", {
+      registrationCode: reg.registrationCode,
+      sent: result.success,
+      detail: result.detail,
+    });
+
     if (result.success) {
       try {
         await prisma.registration.update({
