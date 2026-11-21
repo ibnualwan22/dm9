@@ -1,17 +1,24 @@
 /**
- * WhatsApp Gateway — wa-multi Amtsilati Pusat (sesi 2, sama seperti SIAKAD).
+ * WhatsApp via relay SIAKAD (VPS) — panggilan langsung dari Vercel ke
+ * gateway wa-multi diblokir Cloudflare ("Just a moment...", 403 HTML),
+ * jadi DM9 memanggil relay di Siakad yang meneruskan ke gateway
+ * wa-multi Amtsilati Pusat (sesi 2, sama seperti SIAKAD).
  *
- * Endpoint: POST https://wa-multi-session.amtsilatipusat.com/api/v1/sessions/{sessionId}/send
- * Header: X-API-Key: {WA_API_KEY}
+ * Endpoint: POST {SIAKAD_RELAY_URL} (default
+ * https://siakad.markazarabiyah.site/api/relay/dm9-whatsapp)
+ * Header: Authorization: Bearer {SIAKAD_RELAY_SECRET}
  * Body: { to: "628xxxxxxxxxx", message: "..." }
  *
  * Konfigurasi (di Vercel project dm9, Environment Variables):
- * - WA_API_KEY: kunci API gateway (nilai sama seperti .env SIAKAD)
- * - WA_SESSION_ID2: id sesi 2 (nilai sama seperti .env SIAKAD)
+ * - SIAKAD_RELAY_URL: alamat relay (opsional, ada default di bawah)
+ * - SIAKAD_RELAY_SECRET: kunci relay (nilai sama seperti DM9_RELAY_SECRET
+ *   di .env SIAKAD)
  * Nilai kredensial TIDAK PERNAH ditulis di kode / chat.
  */
 
-const WA_API_URL = "https://wa-multi-session.amtsilatipusat.com/api/v1";
+const RELAY_URL =
+  process.env.SIAKAD_RELAY_URL ||
+  "https://siakad.markazarabiyah.site/api/relay/dm9-whatsapp";
 
 /** Samarkan nomor di log (62***789) — log tidak boleh memuat nomor utuh. */
 function maskPhone(phone: string): string {
@@ -23,13 +30,11 @@ export async function sendWhatsAppMessage(
   target: string,
   message: string
 ): Promise<{ success: boolean; detail?: string }> {
-  const apiKey = process.env.WA_API_KEY;
-  const sessionId =
-    process.env.WA_SESSION_ID2 || process.env.WA_SESSION_ID || "default";
+  const relaySecret = process.env.SIAKAD_RELAY_SECRET;
 
-  if (!apiKey) {
-    console.warn("[whatsapp] WA_API_KEY belum dikonfigurasi");
-    return { success: false, detail: "WA_API_KEY belum dikonfigurasi" };
+  if (!relaySecret) {
+    console.warn("[whatsapp] SIAKAD_RELAY_SECRET belum dikonfigurasi");
+    return { success: false, detail: "SIAKAD_RELAY_SECRET belum dikonfigurasi" };
   }
 
   const to = target.trim();
@@ -39,18 +44,18 @@ export async function sendWhatsAppMessage(
   }
 
   try {
-    const res = await fetch(`${WA_API_URL}/sessions/${sessionId}/send`, {
+    const res = await fetch(RELAY_URL, {
       method: "POST",
       headers: {
-        "X-API-Key": apiKey,
         "Content-Type": "application/json",
+        Authorization: `Bearer ${relaySecret}`,
       },
       body: JSON.stringify({ to, message }),
     });
 
-    // Baca body mentah dulu: isi body-lah yang membedakan 403 dari gateway
-    // (mis. sesi tidak ditemukan / nomor tidak terdaftar) dengan 403 dari
-    // Cloudflare (halaman HTML). Kunci API TIDAK PERNAH ditulis ke log.
+    // Baca body mentah dulu: relay mengembalikan JSON { success, detail },
+    // tapi bila relay/gateway bermasalah, isi body-lah yang menjelaskan.
+    // Kunci relay TIDAK PERNAH ditulis ke log.
     const rawText = await res.text();
     let data: Record<string, unknown> = {};
     try {
@@ -60,12 +65,12 @@ export async function sendWhatsAppMessage(
     }
 
     const logContext = {
-      sessionId,
+      via: "siakad-relay",
       to: maskPhone(to),
       status: res.status,
     };
 
-    if (res.ok) {
+    if (res.ok && data.success === true) {
       console.log("[whatsapp] terkirim", logContext);
       return { success: true, detail: "Pesan terkirim" };
     }
@@ -78,6 +83,7 @@ export async function sendWhatsAppMessage(
     return {
       success: false,
       detail:
+        (typeof data.detail === "string" && data.detail) ||
         (typeof data.message === "string" && data.message) ||
         (typeof data.error === "string" && data.error) ||
         `HTTP Error ${res.status}`,
@@ -86,7 +92,7 @@ export async function sendWhatsAppMessage(
     const errorMessage =
       error instanceof Error ? error.message : "Network error";
     console.error("[whatsapp] network error", {
-      sessionId,
+      via: "siakad-relay",
       to: maskPhone(to),
       error: errorMessage,
     });
