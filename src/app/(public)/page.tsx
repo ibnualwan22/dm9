@@ -102,10 +102,7 @@ export default async function PublicHomePage() {
 
       {/* SEKSI 2: Timer Hitung Mundur Penutupan Pendaftaran */}
       <Reveal>
-        <CountdownTimer
-          title="Penutupan Pendaftaran"
-          subtitle="Pendaftaran akan ditutup pada"
-        />
+        <CountdownTimer deadlineISO={EVENT_CONFIG.deadlineISO} />
       </Reveal>
 
       {/* SEKSI 3: Katalog Cabang Lomba */}
